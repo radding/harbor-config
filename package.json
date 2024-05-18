@@ -1,0 +1,22 @@
+{
+	"name": "harbor-config",
+	"version": "1.0.0",
+	"description": "The Constructs to build Harbor projects",
+	"main": "src/index.ts",
+	"scripts": {
+		"build": "tsc",
+		"test": "echo \"Error: no test specified\" && exit 1"
+	},
+	"author": "Yoseph Radding",
+	"license": "MIT",
+	"devDependencies": {
+		"@types/lodash": "^4.17.1",
+		"@types/node": "^20.12.12",
+		"typescript": "^5.4.5"
+	},
+	"dependencies": {
+		"constructs": "^10.3.0",
+		"lodash": "^4.17.21",
+		"zod": "^3.23.8"
+	}
+}
