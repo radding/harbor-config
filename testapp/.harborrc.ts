@@ -1,5 +1,4 @@
-import { Dependency, Package, PackageSetup, Plugin } from "../src";
-import { Command } from "../src/Command";
+import { Dependency, Package, PackageSetup, Plugin, Task } from "../src";
 
 const pkg = new Package("Harbor-Test", {
 	repository: "https://github.com/radding/harbor",
@@ -14,16 +13,21 @@ new PackageSetup(pkg, "ensure_node_env", {
 	actions: []
 });
 
-new Command(pkg, "build", {
+new Task(pkg, "build", {
 	plugin: shell,
 	options: {
 		run: "ls -al",
 		env: {},
 	},
+	artifacts: [],
 })
 
 // console.log(JSON.stringify(pkg.synth(), null, 2));
-const json: any = pkg.synth();
+pkg.synth(true);
+const json: any = pkg.createTree();
+
+// END ACTUAL CODE
+
 
 type GraphActions = {
 	preOrder: (id: string, data: any) => void;
@@ -34,7 +38,7 @@ const dfs = (id: string, actions: Partial<GraphActions>) => {
 	const data = json.constructs[id];
 	actions.preOrder && actions.preOrder(id, data);
 	try {
-		data.dependsOn.forEach(id => {
+		data.dependsOn.forEach((id: string) => {
 			dfs(id, actions);
 		});
 	} catch (e) {
@@ -45,7 +49,7 @@ const dfs = (id: string, actions: Partial<GraphActions>) => {
 
 const topoSetup: string[] = [];
 const added = new Set();
-json.setup.forEach(id => {
+json.setup.forEach((id: string) => {
 	dfs(id, {
 		postOrder: (id, data) => {
 			if (added.has(id)) {

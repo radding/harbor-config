@@ -3,6 +3,7 @@ import _ from "lodash";
 import * as path from "path"
 import { HarborConstruct } from "./HarborConstruct";
 import { z } from "zod";
+import * as fs from "fs";
 
 // export interface PackageOptions {
 // 	/**
@@ -42,7 +43,7 @@ export class Package extends Construct {
 	public readonly __kind = pkgSymbol;
 
 	public readonly location: string;
-	private readonly commands: Record<string, string> = {};
+	private readonly tasks: Record<string, string> = {};
 	private readonly setup: string[] = [];
 	public readonly packageInfo: Omit<PackageOptions, "meta">
 
@@ -78,15 +79,15 @@ export class Package extends Construct {
 	/**
 	 * addCommand
 	 */
-	public addCommand(commandName: string, commandNode: Node) {
-		this.commands[commandName] = commandNode.path;
+	public addTask(taskName: string, taskNode: Node) {
+		this.tasks[taskName] = taskNode.path;
 	}
 
 	public addSetup(node: Node) {
 		this.setup.push(node.path);
 	}
 
-	synth(): object {
+	createTree(): object {
 		const constructs = this.node.children.filter(HarborConstruct.of).reduce((acc, child) => {
 			return {
 				...acc,
@@ -95,9 +96,16 @@ export class Package extends Construct {
 		}, {});
 		return {
 			constructs,
-			commands: this.commands,
+			tasks: this.tasks,
 			setup: this.setup,
 			packageInfo: this.packageInfo,
 		}
+
+	}
+
+	synth(prettyFormat: boolean = false): void {
+		const tree = this.createTree();
+		fs.mkdirSync(this.location, { recursive: true})
+		fs.writeFileSync(path.join(this.location, `config.json`), JSON.stringify(tree, undefined, prettyFormat ? 2 : undefined));
 	}
 }

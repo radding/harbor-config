@@ -1,5 +1,5 @@
 export * from "./package";
-export * from "./Command";
+export * from "./Task";
 export * from "./HarborConstruct";
 export * from "./PackageSetup";
 export * from "./Plugin";
