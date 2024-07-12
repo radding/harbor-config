@@ -1,32 +1,46 @@
 package telemetry
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
+	"github.com/phsym/console-slog"
 )
 
-type LogLevel zerolog.Level
+type LogLevel slog.Level
+
+const (
+	FatalLevel   = LogLevel(slog.Level(9))
+	ErrorLevel   = LogLevel(slog.LevelError)
+	WarnLevel    = LogLevel(slog.LevelWarn)
+	InfoLevel    = LogLevel(slog.LevelInfo)
+	DebugLevel   = LogLevel(slog.LevelDebug)
+	HttpLevel    = LogLevel(slog.Level(-7))
+	MetricsLevel = LogLevel(slog.Level(-8))
+	TraceLevel   = LogLevel(slog.Level(-10))
+)
 
 func (l *LogLevel) String() string {
 	switch *l {
-	case LogLevel(zerolog.DebugLevel):
+	case DebugLevel:
 		return "debug"
-	case LogLevel(zerolog.InfoLevel):
+	case InfoLevel:
 		return "info"
-	case LogLevel(zerolog.PanicLevel):
-		return "panic"
-	case LogLevel(zerolog.FatalLevel):
+	case FatalLevel:
 		return "fatal"
-	case LogLevel(zerolog.ErrorLevel):
+	case ErrorLevel:
 		return "error"
-	case LogLevel(zerolog.TraceLevel):
+	case TraceLevel:
 		return "trace"
-	case LogLevel(zerolog.WarnLevel):
+	case WarnLevel:
 		return "warn"
+	case MetricsLevel:
+		return "metrics"
+	case HttpLevel:
+		return "http"
 	default:
 		return "unknown"
 	}
@@ -34,20 +48,22 @@ func (l *LogLevel) String() string {
 
 func (l *LogLevel) Set(val string) error {
 	switch strings.ToLower(val) {
-	case "info":
-		*l = LogLevel(zerolog.InfoLevel)
-	case "warn":
-		*l = LogLevel(zerolog.WarnLevel)
-	case "panic":
-		*l = LogLevel(zerolog.PanicLevel)
 	case "fatal":
-		*l = LogLevel(zerolog.FatalLevel)
+		*l = FatalLevel
 	case "error":
-		*l = LogLevel(zerolog.ErrorLevel)
+		*l = ErrorLevel
+	case "warn":
+		*l = WarnLevel
+	case "info":
+		*l = InfoLevel
 	case "debug":
-		*l = LogLevel(zerolog.DebugLevel)
+		*l = DebugLevel
+	case "http":
+		*l = HttpLevel
+	case "metrics":
+		*l = MetricsLevel
 	case "trace":
-		*l = LogLevel(zerolog.TraceLevel)
+		*l = TraceLevel
 	default:
 		return fmt.Errorf(fmt.Sprintf("unknown log level: %s", val))
 	}
@@ -63,27 +79,62 @@ func LogLevelPtr(logLevel LogLevel) *LogLevel {
 }
 
 func ConfigureLogs(machineReadable bool, logLevel LogLevel) {
-	zerolog.SetGlobalLevel(zerolog.Level(logLevel))
-	if !machineReadable {
-		out := zerolog.ConsoleWriter{Out: os.Stdout}
-		out.PartsOrder = []string{
-			"Identifier",
-			"time",
-			"level",
-			"message",
-		}
-		out.FieldsExclude = []string{
-			"Identifier",
-		}
-		out.FormatFieldValue = func(i interface{}) string {
-			if i == nil {
-				return ""
-			}
-			return fmt.Sprintf("%s", i)
-		}
-
-		log.Logger = log.Output(out)
+	var handler slog.Handler = console.NewHandler(os.Stdout, &console.HandlerOptions{
+		Level:     slog.Level(logLevel),
+		AddSource: logLevel < InfoLevel,
+		Theme:     console.NewBrightTheme(),
+	})
+	if machineReadable {
+		handler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+			Level:     slog.Level(logLevel),
+			AddSource: logLevel < InfoLevel,
+		})
 	}
-	log.Trace().Msgf("Starting logging with level: %s", logLevel.String())
+	logger := slog.New(handler)
+	slog.SetDefault(logger)
+	slog.Debug(fmt.Sprintf("Logging started with level %s", logLevel.String()))
 
+}
+
+func Trace(msg string, args ...any) {
+	slog.Log(context.Background(), slog.Level(TraceLevel), msg, args...)
+}
+
+func Metrics(msg string, args ...any) {
+	slog.Log(context.Background(), slog.Level(MetricsLevel), msg, args...)
+}
+
+func Fatal(msg string, err error, args ...any) {
+	things := append([]any{slog.String("error", err.Error())}, args...)
+	slog.Log(context.Background(), slog.Level(FatalLevel), msg, things...)
+}
+
+type HttpData struct {
+	Start      bool
+	Method     string
+	Url        string
+	StatusCode int64
+	Latencyms  int64
+}
+
+func Http(data HttpData, args ...any) {
+	if data.Start {
+		slog.Log(
+			context.Background(),
+			slog.Level(HttpLevel),
+			fmt.Sprintf("Request %s:%s", data.Method, data.Url),
+			args...)
+
+	} else {
+		slog.Log(
+			context.Background(),
+			slog.Level(HttpLevel),
+			fmt.Sprintf("Response %s:%s", data.Method, data.Url),
+			append(
+				args,
+				slog.Int64("status_code", data.StatusCode),
+				slog.Int64("latency_ms", data.Latencyms),
+			)...,
+		)
+	}
 }

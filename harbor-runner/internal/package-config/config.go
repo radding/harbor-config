@@ -6,10 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path"
 
-	"github.com/rs/zerolog/log"
+	"github.com/radding/harbor-runner/internal/telemetry"
 )
 
 type Construct struct {
@@ -34,9 +35,9 @@ type Config struct {
 var configs map[string]Config = map[string]Config{}
 
 func LoadConfig(fileName string) (Config, error) {
-	log.Trace().Msgf("loading %s config", fileName)
+	telemetry.Trace(fmt.Sprintf("loading %s config", fileName))
 	if conf, ok := configs[fileName]; ok {
-		log.Debug().Msgf("%s was found in our cache returning it", fileName)
+		slog.Debug(fmt.Sprintf("%s was found in our cache returning it", fileName))
 		return conf, nil
 	}
 	hasher := sha256.New()
@@ -48,13 +49,13 @@ func LoadConfig(fileName string) (Config, error) {
 
 	hashedFile := hex.EncodeToString(hasher.Sum(nil))
 	configPath := path.Join("./.harbor", hashedFile, "config.json")
-	log.Debug().Msgf("loading config from %s", configPath)
+	slog.Debug(fmt.Sprintf("loading config from %s", configPath))
 
 	configBytes, err := os.ReadFile(configPath)
 	if errors.Is(err, os.ErrNotExist) {
-		log.Debug().Msgf("%s does not exsist, executing now", configPath)
+		slog.Debug(fmt.Sprintf("%s does not exsist, executing now", configPath))
 	} else if err != nil {
-		log.Warn().Err(err).Msgf("error reading %s", configPath)
+		slog.Warn(fmt.Sprintf("error reading %s", configPath), slog.String("error", err.Error()))
 	}
 
 	conf := Config{}
