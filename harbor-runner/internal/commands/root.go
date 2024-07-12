@@ -4,16 +4,15 @@ import (
 	"os"
 
 	"github.com/radding/harbor-runner/internal/telemetry"
-	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 )
 
 var machineReadableLogs *bool
-var logLevel *telemetry.LogLevel = telemetry.LogLevelPtr(telemetry.LogLevel(zerolog.InfoLevel))
+var logLevel *telemetry.LogLevel = telemetry.LogLevelPtr(telemetry.InfoLevel)
 
 func init() {
 	machineReadableLogs = rootCmd.PersistentFlags().BoolP("machine-readable", "m", false, "Produce machine readable JSON logs?")
-	rootCmd.PersistentFlags().VarP(logLevel, "log-level", "v", "The Log level to set the logger to. Can be: Panic, Fatal, Error, Warn, Info, Debug, and Trace")
+	rootCmd.PersistentFlags().VarP(logLevel, "log-level", "v", "The Log level to set the logger to. Can be: Fatal, Error, Warn, Info, Debug, Http, Metrics, and Trace")
 }
 
 var rootCmd = &cobra.Command{

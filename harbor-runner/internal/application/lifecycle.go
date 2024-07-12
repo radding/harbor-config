@@ -3,8 +3,7 @@ package application
 import (
 	"errors"
 	"fmt"
-
-	"github.com/rs/zerolog/log"
+	"log/slog"
 )
 
 type Initializer interface {
@@ -30,7 +29,7 @@ func (a *Application) Initialize() error {
 	for _, init := range a.initializers {
 		err := init.Initialize()
 		if err != nil {
-			log.Warn().Msgf("error initializing: %s", err)
+			slog.Warn(fmt.Sprintf("error initializing: %s", err))
 			errs = append(errs, err)
 		}
 	}
@@ -52,7 +51,7 @@ func (a *Application) Clean() error {
 	for _, init := range a.cleaners {
 		err := init.Clean()
 		if err != nil {
-			log.Warn().Msgf("error cleaning up: %s", err)
+			slog.Warn(fmt.Sprintf("error cleaning up: %s", err))
 			errs = append(errs, err)
 		}
 	}
@@ -74,7 +73,7 @@ func (a *Application) Register(m any) {
 	}
 	if mod, ok := m.(Executor); ok {
 		if a.executor != nil {
-			log.Warn().Msg("Attempting to re-register an executor, I will not do this!")
+			slog.Warn("Attempting to re-register an executor, I will not do this!")
 			return
 		}
 		a.executor = mod

@@ -6,7 +6,7 @@ import (
 	"github.com/radding/harbor-runner/internal/application"
 	"github.com/radding/harbor-runner/internal/cfg"
 	"github.com/radding/harbor-runner/internal/commands"
-	"github.com/rs/zerolog/log"
+	"github.com/radding/harbor-runner/internal/telemetry"
 )
 
 func main() {
@@ -20,7 +20,7 @@ func main() {
 	err := application.RunApplication(app)
 
 	if err != nil {
-		log.Fatal().Err(err).Msg("Unrecoverable error")
+		telemetry.Fatal("Unrecoverable error", err)
 		os.Exit(1)
 	}
 }
