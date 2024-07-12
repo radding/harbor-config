@@ -10,8 +10,14 @@ export type TaskOpts = {
 	inputs?: string | string[] | (() => (string | string[]))
 }
 
-export class Task extends HarborConstruct {
-	constructor(scope: Construct, id: string, opts: TaskOpts) {
+export interface ITask extends IConstruct {
+	needs(...dep: Construct[]): ITask;
+	then(next: ITask): ITask;
+	readonly id: string;
+}
+
+export class Task extends HarborConstruct implements ITask{
+	constructor(scope: Construct, public readonly id: string, opts: TaskOpts) {
 		let inputs = opts.inputs ?? [];
 		if (typeof inputs === "function") {
 			inputs = inputs();
@@ -32,8 +38,13 @@ export class Task extends HarborConstruct {
 
 		this.package.addTask(taskName, this.node);
 	}
+	then(next: ITask): ITask {
+		next.node.addDependency(this);
+		return next;
+	}
 	
-	public needs(dependency: Task) {
-		this.node.addDependency(dependency);
+	public needs(...dependency: Construct[]): ITask {
+		this.node.addDependency(...dependency);
+		return this;
 	}
 }

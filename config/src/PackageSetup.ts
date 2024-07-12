@@ -1,8 +1,8 @@
-import { Construct } from "constructs";
+import { Construct, IConstruct } from "constructs";
 import { HarborConstruct } from "./HarborConstruct";
 
 type PackageSetupOpts = {
-	actions: HarborConstruct[]
+	actions: IConstruct[]
 }
 
 export class PackageSetup extends HarborConstruct {

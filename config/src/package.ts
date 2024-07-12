@@ -4,6 +4,9 @@ import * as path from "path"
 import { HarborConstruct } from "./HarborConstruct";
 import { z } from "zod";
 import * as fs from "fs";
+import { PackageSetup } from "./PackageSetup";
+import { ITask } from "./Task";
+import crypto from "crypto"
 
 // export interface PackageOptions {
 // 	/**
@@ -20,6 +23,7 @@ const PackageOptions = z.object({
 	}),
 
 	repository: z.string(),
+	path: z.string().optional(),
 	homepage: z.string().url().optional(),
 	description: z.string().optional(),
 	issues: z.string().url().optional(),
@@ -83,6 +87,10 @@ export class Package extends Construct {
 		this.tasks[taskName] = taskNode.path;
 	}
 
+	public registerTask(task: ITask) {
+		this.addTask(task.id, task.node);
+	}
+
 	public addSetup(node: Node) {
 		this.setup.push(node.path);
 	}
@@ -105,7 +113,9 @@ export class Package extends Construct {
 
 	synth(prettyFormat: boolean = false): void {
 		const tree = this.createTree();
-		fs.mkdirSync(this.location, { recursive: true})
-		fs.writeFileSync(path.join(this.location, `config.json`), JSON.stringify(tree, undefined, prettyFormat ? 2 : undefined));
+		const content = fs.readFileSync(require.main?.filename!)
+		const hash = crypto.createHash("sha256").update(content).digest("hex").toString();
+		fs.mkdirSync(path.join(this.location, hash), { recursive: true})
+		fs.writeFileSync(path.join(this.location, hash,`config.json`), JSON.stringify(tree, undefined, prettyFormat ? 2 : undefined));
 	}
 }
