@@ -1,4 +1,4 @@
-package harborconfig
+package packageconfig
 
 import (
 	"crypto/sha256"
