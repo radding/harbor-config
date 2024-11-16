@@ -25,6 +25,7 @@ export class Task extends HarborConstruct implements ITask{
 		super(scope, id, {
 			kind: "Harbor.dev/Task",
 			options: {
+				plugin: opts.plugin.node.id,
 				...opts.options,
 				artifacts: opts.artifacts,
 				inputs,

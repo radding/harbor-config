@@ -1,0 +1,16 @@
+
+Package Name:
+    \e[1;34m{{ .PackageInfo.Name }}@{{ .PackageInfo.Version }}\e[0m
+
+Stability: 
+    {{ .PackageInfo.Stability }}
+
+Repo:
+    {{ .PackageInfo.Repository }}
+
+Tasks:
+    {{ range $key, $val := .Tasks }}{{ $key }}
+    {{ end }}
+Dependencies:
+    {{ range $key, $value := .Constructs}}{{ if eq $value.Kind "harbor.dev/Dependency" }}{{ $key }}
+    {{ end }}{{end}}

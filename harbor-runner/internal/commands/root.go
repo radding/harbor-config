@@ -3,6 +3,7 @@ package commands
 import (
 	"os"
 
+	"github.com/radding/harbor-runner/internal/executor"
 	"github.com/radding/harbor-runner/internal/telemetry"
 	"github.com/spf13/cobra"
 )
@@ -23,10 +24,15 @@ var rootCmd = &cobra.Command{
 	},
 }
 
-type RootExecutor struct{}
+var exec executor.Executor
+
+type RootExecutor struct {
+	Exec executor.Executor
+}
 
 func (r *RootExecutor) Initialize() error {
 	rootCmd.ParseFlags(os.Args)
+	exec = r.Exec
 	telemetry.ConfigureLogs(*machineReadableLogs, *logLevel)
 	return nil
 }

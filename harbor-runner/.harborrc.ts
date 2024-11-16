@@ -1,4 +1,4 @@
-import { ExecCommand, Package, PackageSetup,  } from "../config/src";
+import { Dependency, ExecCommand, Package, PackageSetup,  } from "../config/dist";
 
 const GO_VERSION = "go1.22.1";
 
@@ -8,6 +8,10 @@ const pkg = new Package("harbor-code", {
 	version: "1.0.0",
     path: "harbor-core/",
     stability: "Alpha", 
+});
+
+const nodego = new Dependency(pkg, "https://github.com/radding/harbor", {
+    path: "nodego/"
 });
 
 
@@ -79,8 +83,9 @@ pkg.registerTask(new ExecCommand(pkg, "build", {
         "./cmd/harbor/main.go"
     ]
 }).needs(
+    nodego.task("test"),
     tests,
     lint,
 ));
 
-pkg.synth();
+export default pkg;

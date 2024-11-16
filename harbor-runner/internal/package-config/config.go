@@ -1,15 +1,18 @@
 package packageconfig
 
 import (
+	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"path"
+	"path/filepath"
 
+	"github.com/pkg/errors"
 	"github.com/radding/harbor-runner/internal/telemetry"
 )
 
@@ -20,16 +23,48 @@ type Construct struct {
 }
 
 type PackageInfo struct {
-	Repository string `json:"repository"`
-	Version    string `json:"version"`
+	Meta struct {
+		HarborPackageDirectory string `json:"harborPackageDirectory"`
+	} `json:"meta"`
+	Repository        string `json:"repository"`
+	Version           string `json:"version"`
+	Name              string `json:"name"`
+	Path              string `json:"path"`
+	Homepage          string `json:"homepage"`
+	Description       string `json:"description"`
+	Issues            string `json:"issues"`
+	License           string `json:"license"`
+	Stability         string `json:"stability"`
+	ArtifactsLocation string `json:"artifactsLocation"`
 }
 
 type Config struct {
-	hash        string
-	Constructs  map[string]Construct `json:"constructs"`
-	Tasks       map[string]string    `json:"tasks"`
-	Setup       []string             `json:"setup"`
-	PackageInfo PackageInfo          `json:"packageInfo"`
+	hash           string
+	cachedLocation string
+	workingDir     string
+	Constructs     map[string]Construct `json:"constructs"`
+	Tasks          map[string]string    `json:"tasks"`
+	Setup          []string             `json:"setup"`
+	PackageInfo    PackageInfo          `json:"packageInfo"`
+	WasSetupRun    bool                 `json:"was_setup_run"`
+}
+
+func (c *Config) Save() error {
+	bts, err := json.Marshal(c)
+	if err != nil {
+		return errors.Wrap(err, "failed to marshal configuration")
+	}
+	err = os.WriteFile(c.cachedLocation, bts, 0666)
+	if err != nil {
+		return errors.Wrap(err, "failed to save configuration")
+	}
+	return nil
+}
+
+func (c *Config) ConfigureContext(ct context.Context) context.Context {
+	ctx := context.WithValue(ct, "CacheLocation", path.Dir(c.cachedLocation))
+	ctx = context.WithValue(ctx, "WorkingDir", c.workingDir)
+	return ctx
 }
 
 var configs map[string]Config = map[string]Config{}
@@ -37,7 +72,7 @@ var configs map[string]Config = map[string]Config{}
 func LoadConfig(fileName string) (Config, error) {
 	telemetry.Trace(fmt.Sprintf("loading %s config", fileName))
 	if conf, ok := configs[fileName]; ok {
-		slog.Debug(fmt.Sprintf("%s was found in our cache returning it", fileName))
+		slog.Debug("config already loaded into memory, returning it now", slog.String("file", fileName))
 		return conf, nil
 	}
 	hasher := sha256.New()
@@ -46,24 +81,103 @@ func LoadConfig(fileName string) (Config, error) {
 		return Config{}, fmt.Errorf("error opening file: %w", err)
 	}
 	hasher.Write(s)
-
 	hashedFile := hex.EncodeToString(hasher.Sum(nil))
 	configPath := path.Join("./.harbor", hashedFile, "config.json")
+	var config = Config{
+		WasSetupRun:    false,
+		cachedLocation: configPath,
+		workingDir:     path.Dir(fileName),
+	}
 	slog.Debug(fmt.Sprintf("loading config from %s", configPath))
-
 	configBytes, err := os.ReadFile(configPath)
 	if errors.Is(err, os.ErrNotExist) {
-		slog.Debug(fmt.Sprintf("%s does not exsist, executing now", configPath))
-	} else if err != nil {
-		slog.Warn(fmt.Sprintf("error reading %s", configPath), slog.String("error", err.Error()))
-	}
+		os.MkdirAll(path.Dir(configPath), 0766)
+		slog.Debug("config isn't cached, creating it now", slog.String("CachedPath", configPath))
+		err := telemetry.TimeWithError("compile config", func() error {
+			buffer := new(bytes.Buffer)
+			err := CompileAndExecute(fileName, buffer)
+			if err != nil {
+				return errors.Wrap(err, "failed to execute config file")
+			}
+			bts := buffer.Bytes()
+			configResults := string(bts)
+			telemetry.Trace("Got config results", slog.String("results", configResults))
+			if err = json.Unmarshal(bts, &config); err != nil {
+				return errors.Wrap(err, "failed to unmarshal resulting config")
+			}
+			telemetry.Trace("writing the config file to cache", slog.String("cachedfile", configPath))
+			err = os.WriteFile(configPath, bts, 0666)
+			if err != nil {
+				return errors.Wrap(err, "failed to cache config file")
+			}
+			return nil
+		})
+		if err != nil {
+			slog.Error("Faild to execute configuration file", slog.String("error", err.Error()))
+			return config, nil
+		}
 
-	conf := Config{}
-	conf.hash = hashedFile
-	err = json.Unmarshal(configBytes, &conf)
-	if err != nil {
-		return conf, fmt.Errorf("failed to unserialize configuration: %w", err)
+	} else {
+		if err = json.Unmarshal(configBytes, &config); err != nil {
+			return config, errors.Wrap(err, "failed to unmarshal cached config")
+		}
 	}
-	configs[fileName] = conf
-	return conf, nil
+	config.hash = hashedFile
+	configs[fileName] = config
+
+	return config, nil
+}
+
+func tryFindConfigBase(pathName, fileName string, maxRecursion int64) (string, error) {
+	if maxRecursion < 0 || pathName == "/" {
+		return "", fmt.Errorf("max recursion to find package config")
+	}
+	maybeFile := path.Join(pathName, fileName)
+	_, err := os.Stat(maybeFile)
+	if err != nil && os.IsNotExist(err) {
+		return tryFindConfigBase(filepath.Dir(pathName), fileName, maxRecursion-1)
+	} else if err != nil {
+		return "", errors.Wrap(err, "couldn't stat potential config file")
+	}
+	return pathName, nil
+}
+
+var pkg *Config
+
+func GetConfig() *Config {
+	return pkg
+}
+
+type Lifecycle struct{}
+
+type NotFoundError struct {
+	err error
+}
+
+func (n *NotFoundError) Error() string {
+	return fmt.Sprintf("no configuration file found: %s", n.err.Error())
+}
+
+func IsNotFoundError(e error) bool {
+	_, ok := e.(*NotFoundError)
+	return ok
+}
+
+func (l *Lifecycle) Initialize() error {
+	wd, err := os.Getwd()
+	if err != nil {
+		return errors.Wrap(err, "could not get working directory")
+	}
+	base, err := tryFindConfigBase(wd, ".harborrc.ts", 100)
+	if err != nil {
+		slog.Warn(fmt.Sprintf("failed to find the base of the project: %s", err))
+		return nil
+	}
+	p, err := LoadConfig(path.Join(base, ".harborrc.ts"))
+	if err != nil {
+		slog.Error(fmt.Sprintf("failed to load configuration of the project: %s", err))
+		return err
+	}
+	pkg = &p
+	return nil
 }

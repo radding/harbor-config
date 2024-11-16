@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+
+	"github.com/radding/harbor-runner/internal/telemetry"
 )
 
 type Initializer interface {
@@ -26,8 +28,8 @@ type Application struct {
 
 func (a *Application) Initialize() error {
 	errs := []error{}
-	for _, init := range a.initializers {
-		err := init.Initialize()
+	for ndx, init := range a.initializers {
+		err := telemetry.TimeWithError(fmt.Sprintf("initializing module %d", ndx), init.Initialize)
 		if err != nil {
 			slog.Warn(fmt.Sprintf("error initializing: %s", err))
 			errs = append(errs, err)
@@ -48,8 +50,9 @@ func (a *Application) Exectute() error {
 
 func (a *Application) Clean() error {
 	errs := []error{}
-	for _, init := range a.cleaners {
-		err := init.Clean()
+	for ndx, init := range a.cleaners {
+		err := telemetry.TimeWithError(fmt.Sprintf("cleaning module %d", ndx), init.Clean)
+		// err := init.Clean()
 		if err != nil {
 			slog.Warn(fmt.Sprintf("error cleaning up: %s", err))
 			errs = append(errs, err)

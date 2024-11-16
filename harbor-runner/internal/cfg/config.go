@@ -36,7 +36,7 @@ func (c *ConfigLifeCycle) Initialize() error {
 
 func (c *ConfigLifeCycle) Clean() error {
 	slog.Debug("Saving configuration")
-	err := os.MkdirAll(os.ExpandEnv("$HOME/.harbor"), 0700)
+	err := os.MkdirAll(os.ExpandEnv("$HOME/.harbor"), 0766)
 	if err != nil {
 		return errors.Wrap(err, "failed to create harbor home")
 	}

@@ -21,7 +21,7 @@ const PackageOptions = z.object({
 	meta: z.object({
 		harborPackageDirectory: z.string(),
 	}),
-
+	name: z.string().optional(),
 	repository: z.string(),
 	path: z.string().optional(),
 	homepage: z.string().url().optional(),
@@ -37,8 +37,17 @@ export type PackageOptions = z.infer<typeof PackageOptions>
 
 const defaultOptions: Pick<PackageOptions, "meta"> = {
 	meta: {
-		harborPackageDirectory: path.join(path.dirname(require.main?.filename!), ".harbor/"),
+		harborPackageDirectory: path.join(path.dirname(require.main?.filename ?? process.env.HARBORJS_HARBOR_LOC ?? ""), ".harbor/"),
 	},
+}
+
+class RemoteExecutorPlugin extends HarborConstruct {
+	constructor(scope: Construct, id: string) {
+		super(scope, id, {
+			kind: "harbor.dev/RemoteExecutor",
+			options: {},
+		});
+	}
 }
 
 const pkgSymbol = Symbol.for("Package");
@@ -50,6 +59,7 @@ export class Package extends Construct {
 	private readonly tasks: Record<string, string> = {};
 	private readonly setup: string[] = [];
 	public readonly packageInfo: Omit<PackageOptions, "meta">
+	public readonly remoteExcecutor: IConstruct;
 
 	constructor(name: string, opts: Partial<PackageOptions> = {}) {
 		super(null as any, name);
@@ -57,6 +67,8 @@ export class Package extends Construct {
 		const { meta, ...rest } = options;
 		this.location = meta.harborPackageDirectory;
 		this.packageInfo = rest;
+		this.packageInfo.name = this.packageInfo.name ?? name;
+		this.remoteExcecutor = new RemoteExecutorPlugin(this, "remote-executor");
 	}
 
 	/**
@@ -106,14 +118,14 @@ export class Package extends Construct {
 			constructs,
 			tasks: this.tasks,
 			setup: this.setup,
-			packageInfo: this.packageInfo,
+			packageInfo: this.packageInfo
 		}
 
 	}
 
 	synth(prettyFormat: boolean = false): void {
 		const tree = this.createTree();
-		const content = fs.readFileSync(require.main?.filename!)
+		const content = fs.readFileSync(require.main?.filename ?? process.env.HARBORJS_HARBOR_LOC ?? "")
 		const hash = crypto.createHash("sha256").update(content).digest("hex").toString();
 		fs.mkdirSync(path.join(this.location, hash), { recursive: true})
 		fs.writeFileSync(path.join(this.location, hash,`config.json`), JSON.stringify(tree, undefined, prettyFormat ? 2 : undefined));

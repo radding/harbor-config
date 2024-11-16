@@ -13,6 +13,7 @@ import (
 type LogLevel slog.Level
 
 const (
+	OffLevel     = LogLevel(slog.Level(1000))
 	FatalLevel   = LogLevel(slog.Level(9))
 	ErrorLevel   = LogLevel(slog.LevelError)
 	WarnLevel    = LogLevel(slog.LevelWarn)
@@ -41,6 +42,8 @@ func (l *LogLevel) String() string {
 		return "METRICS"
 	case HttpLevel:
 		return "HTTP"
+	case OffLevel:
+		return "OFF"
 	default:
 		return fmt.Sprintf("UNKNOWN(%d)", int64(*l))
 	}
@@ -64,6 +67,8 @@ func (l *LogLevel) Set(val string) error {
 		*l = MetricsLevel
 	case "trace":
 		*l = TraceLevel
+	case "off":
+		*l = OffLevel
 	default:
 		return fmt.Errorf(fmt.Sprintf("unknown log level: %s", val))
 	}

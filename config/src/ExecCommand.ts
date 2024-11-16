@@ -6,6 +6,7 @@ type ExecCommandOpts = {
 	executable: string;
 	args: string[];
 	env?: Record<string, string> | typeof process.env;
+	inputs?: string[]
 }
 
 export class ExecCommand extends HarborConstruct implements ITask {
