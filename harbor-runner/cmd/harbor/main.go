@@ -9,7 +9,6 @@ import (
 	exec "github.com/radding/harbor-runner/internal/executor"
 	packageconfig "github.com/radding/harbor-runner/internal/package-config"
 	"github.com/radding/harbor-runner/internal/telemetry"
-	v8harbor "github.com/radding/harbor-runner/internal/v8"
 )
 
 func main() {
@@ -21,7 +20,6 @@ func main() {
 
 	app := application.New()
 	app.Register(executor)
-	app.Register(v8harbor.GetVm())
 	app.Register(config)
 	app.Register(&packageconfig.Lifecycle{})
 	app.Register(taskExecutor)

@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 
 	"github.com/pkg/errors"
+	"github.com/radding/harbor-runner/internal/cache"
 	"github.com/radding/harbor-runner/internal/telemetry"
 )
 
@@ -47,6 +48,7 @@ type Config struct {
 	Setup          []string             `json:"setup"`
 	PackageInfo    PackageInfo          `json:"packageInfo"`
 	WasSetupRun    bool                 `json:"was_setup_run"`
+	cacher         *cache.Cache
 }
 
 func (c *Config) Save() error {
@@ -61,9 +63,14 @@ func (c *Config) Save() error {
 	return nil
 }
 
+func (c *Config) GetCache() *cache.Cache {
+	return c.cacher
+}
+
 func (c *Config) ConfigureContext(ct context.Context) context.Context {
 	ctx := context.WithValue(ct, "CacheLocation", path.Dir(c.cachedLocation))
 	ctx = context.WithValue(ctx, "WorkingDir", c.workingDir)
+	ctx = context.WithValue(ctx, "Cache", c.cacher)
 	return ctx
 }
 
@@ -88,10 +95,17 @@ func LoadConfig(fileName string) (Config, error) {
 		cachedLocation: configPath,
 		workingDir:     path.Dir(fileName),
 	}
+	config.cacher, err = cache.New(path.Dir(configPath))
+	if err != nil {
+		return config, errors.Wrap(err, "failed to create cache")
+	}
 	slog.Debug(fmt.Sprintf("loading config from %s", configPath))
-	configBytes, err := os.ReadFile(configPath)
-	if errors.Is(err, os.ErrNotExist) {
-		os.MkdirAll(path.Dir(configPath), 0766)
+	buff := new(bytes.Buffer)
+	success, err := config.cacher.Get("config.json", buff)
+	if err != nil {
+		return config, errors.Wrap(err, "failed to read from cache")
+	}
+	if !success {
 		slog.Debug("config isn't cached, creating it now", slog.String("CachedPath", configPath))
 		err := telemetry.TimeWithError("compile config", func() error {
 			buffer := new(bytes.Buffer)
@@ -106,9 +120,9 @@ func LoadConfig(fileName string) (Config, error) {
 				return errors.Wrap(err, "failed to unmarshal resulting config")
 			}
 			telemetry.Trace("writing the config file to cache", slog.String("cachedfile", configPath))
-			err = os.WriteFile(configPath, bts, 0666)
+			err = config.cacher.Add("config.json", bytes.NewBuffer(bts))
 			if err != nil {
-				return errors.Wrap(err, "failed to cache config file")
+				return errors.Wrap(err, "failed to add to cache")
 			}
 			return nil
 		})
@@ -118,7 +132,7 @@ func LoadConfig(fileName string) (Config, error) {
 		}
 
 	} else {
-		if err = json.Unmarshal(configBytes, &config); err != nil {
+		if err = json.Unmarshal(buff.Bytes(), &config); err != nil {
 			return config, errors.Wrap(err, "failed to unmarshal cached config")
 		}
 	}

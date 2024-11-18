@@ -2,5 +2,4 @@ go 1.22
 
 use (
 	./harbor-runner
-	./nodego
 )

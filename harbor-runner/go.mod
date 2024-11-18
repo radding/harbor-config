@@ -14,8 +14,6 @@ require (
 	rogchap.com/v8go v0.9.0
 )
 
-replace rogchap.com/v8go => ../../v8go
-
 require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dlclark/regexp2 v1.4.1-0.20201116162257-a2a8dda75c91 // indirect

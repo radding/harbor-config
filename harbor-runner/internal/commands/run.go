@@ -1,9 +1,6 @@
 package commands
 
 import (
-	"fmt"
-	"log/slog"
-
 	"github.com/pkg/errors"
 	packageconfig "github.com/radding/harbor-runner/internal/package-config"
 	"github.com/radding/harbor-runner/internal/taskgraph"
@@ -29,16 +26,16 @@ var RunCommand = &cobra.Command{
 		if err != nil {
 			return errors.Wrap(err, "failed to build task tree")
 		}
-		if !cfg.WasSetupRun {
-			slog.Debug("Looks like this setup was never run, running setup now")
-			fmt.Println("setting up package")
-			err := tree.RunSetup(ctx)
-			if err != nil {
-				return errors.Wrap(err, "failed to run package setup")
-			}
-			cfg.WasSetupRun = true
-			cfg.Save()
-		}
+		// if !cfg.WasSetupRun {
+		// 	slog.Debug("Looks like this setup was never run, running setup now")
+		// 	fmt.Println("setting up package")
+		// 	err := tree.RunSetup(ctx)
+		// 	if err != nil {
+		// 		return errors.Wrap(err, "failed to run package setup")
+		// 	}
+		// 	cfg.WasSetupRun = true
+		// 	cfg.Save()
+		// }
 		tree.RunTask(ctx, args[0])
 		return nil
 	},
