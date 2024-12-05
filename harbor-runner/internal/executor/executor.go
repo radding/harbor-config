@@ -8,6 +8,8 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/radding/harbor-runner/internal/application"
+	"github.com/radding/harbor-runner/internal/cache"
+	packageconfig "github.com/radding/harbor-runner/internal/package-config"
 	"github.com/radding/harbor-runner/internal/taskgraph"
 	"github.com/radding/harbor-runner/internal/telemetry"
 )
@@ -23,17 +25,22 @@ type ExecutionResponse struct {
 
 type ExecutionRequest struct {
 	Kind          string
-	TaskID        string
 	WithCache     bool
 	ForceClean    bool
-	CacheLocation string
+	Cache         cache.Cache
 	WorkingDir    string
 	WorkspaceRoot string
 	Options       json.RawMessage
+	Task          taskgraph.Task
 }
 
 type ExecutionElement interface {
 	Execute(ctx context.Context, msg ExecutionRequest) (ExecutionResponse, error)
+	RegisterWith(reg Registery)
+}
+
+type Registery interface {
+	Register(kind string, elem ExecutionElement)
 }
 
 type executor struct {
@@ -46,9 +53,12 @@ type ExecutorOptions struct {
 	executors map[string]ExecutionElement
 }
 
-func (e *executor) Register(kind string, exec any) {
-	realExec := exec.(ExecutionElement)
-	e.executors[kind] = realExec
+func (e *executor) Register(kind string, exec ExecutionElement) {
+	e.executors[kind] = exec
+}
+
+func (e *executor) Accept(exec ExecutionElement) {
+	exec.RegisterWith(e)
 }
 
 type ExecutionOption func(e *ExecutorOptions) *ExecutorOptions
@@ -56,6 +66,7 @@ type ExecutionOption func(e *ExecutorOptions) *ExecutorOptions
 type Executor interface {
 	taskgraph.Executor
 	application.Initializer
+	Accept(exec ExecutionElement)
 }
 
 func New(opts ...ExecutionOption) Executor {
@@ -69,8 +80,8 @@ func New(opts ...ExecutionOption) Executor {
 		executors: realOpt.executors,
 	}
 
-	exec := &ExecCommand{}
-	exec.RegsiterWith(e)
+	// exec := &ExecCommand{}
+	// exec.RegsiterWith(e)
 
 	return e
 }
@@ -92,17 +103,17 @@ func (e *executor) Execute(ctx context.Context, kind string, opts json.RawMessag
 	if !ok {
 		forceClean = false
 	}
-	cacheLocation, ok := ctx.Value("CacheLocation").(string)
+	cache, ok := ctx.Value(cache.CacheContextKeyValue).(cache.Cache)
 	if !ok {
-		return fmt.Errorf("Failed to execute %s. Cache location not in context", kind)
+		return fmt.Errorf("failed to execute %s. Cache not in context", kind)
 	}
-	workingDir, ok := ctx.Value("WorkingDir").(string)
+	workingDir, ok := ctx.Value(packageconfig.WorkingDirCacheKey).(string)
 	if !ok {
-		return fmt.Errorf("Failed to execute %s. Working location not in context", kind)
+		return fmt.Errorf("failed to execute %s. Working location not in context", kind)
 	}
-	taskID, ok := ctx.Value("TaskID").(string)
-	if !ok {
-		return fmt.Errorf("Failed to execute %s. Task ID not in context", kind)
+	task, err := taskgraph.GetTaskFromContext(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get task from context")
 	}
 	workspaceRoot, ok := ctx.Value("workspaceRoot").(string)
 	if !ok {
@@ -110,17 +121,17 @@ func (e *executor) Execute(ctx context.Context, kind string, opts json.RawMessag
 	}
 	executor, ok := e.executors[kind]
 	if !ok {
-		return fmt.Errorf("No executor for kind %s", kind)
+		return fmt.Errorf("no executor for kind %s", kind)
 	}
 	resp, err := executor.Execute(ctx, ExecutionRequest{
 		Kind:          kind,
 		WithCache:     withCache,
 		ForceClean:    forceClean,
-		CacheLocation: cacheLocation,
+		Cache:         cache,
 		WorkingDir:    workingDir,
 		WorkspaceRoot: workspaceRoot,
 		Options:       opts,
-		TaskID:        taskID,
+		Task:          task,
 	})
 	if err != nil {
 		return err

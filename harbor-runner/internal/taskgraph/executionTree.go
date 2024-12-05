@@ -30,6 +30,7 @@ func CreateTreeFromConfig(cfg *packageconfig.Config, executor Executor) (*Execut
 		ID:            "setup-mock-task",
 		Dependencies:  []*Task{},
 		dependencySet: map[string]bool{},
+		executor:      executor,
 	}
 	executionTree := &ExecutionTree{
 		setupTask: setUpTask,

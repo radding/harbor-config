@@ -48,7 +48,29 @@ type Config struct {
 	Setup          []string             `json:"setup"`
 	PackageInfo    PackageInfo          `json:"packageInfo"`
 	WasSetupRun    bool                 `json:"was_setup_run"`
-	cacher         *cache.Cache
+	cacher         cache.Cache
+}
+
+func NewConfig(cache cache.Cache) *Config {
+	return &Config{
+		cacher: cache,
+	}
+}
+
+type ConfigContextType string
+
+const ConfigContextKey = ConfigContextType("CONFIG_CONTEXT")
+
+func (c *Config) GetHash() string {
+	return c.hash
+}
+
+func ExtractConfigFromContext(ctx context.Context) (*Config, error) {
+	cfg, ok := ctx.Value(ConfigContextKey).(*Config)
+	if !ok {
+		return nil, errors.New("failed to get config from context")
+	}
+	return cfg, nil
 }
 
 func (c *Config) Save() error {
@@ -63,14 +85,18 @@ func (c *Config) Save() error {
 	return nil
 }
 
-func (c *Config) GetCache() *cache.Cache {
+func (c *Config) GetCache() cache.Cache {
 	return c.cacher
 }
 
+type WorkingDirCacheKeyType string
+
+var WorkingDirCacheKey = WorkingDirCacheKeyType("WorkingDir")
+
 func (c *Config) ConfigureContext(ct context.Context) context.Context {
 	ctx := context.WithValue(ct, "CacheLocation", path.Dir(c.cachedLocation))
-	ctx = context.WithValue(ctx, "WorkingDir", c.workingDir)
-	ctx = context.WithValue(ctx, "Cache", c.cacher)
+	ctx = context.WithValue(ctx, WorkingDirCacheKey, c.workingDir)
+	ctx = context.WithValue(ctx, ConfigContextKey, c)
 	return ctx
 }
 
@@ -87,9 +113,10 @@ func LoadConfig(fileName string) (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("error opening file: %w", err)
 	}
+	info, _ := filepath.Abs(fileName)
 	hasher.Write(s)
 	hashedFile := hex.EncodeToString(hasher.Sum(nil))
-	configPath := path.Join("./.harbor", hashedFile, "config.json")
+	configPath := path.Join(path.Dir(info), "./.harbor", hashedFile, "config.json")
 	var config = Config{
 		WasSetupRun:    false,
 		cachedLocation: configPath,
@@ -105,39 +132,44 @@ func LoadConfig(fileName string) (Config, error) {
 	if err != nil {
 		return config, errors.Wrap(err, "failed to read from cache")
 	}
+	makeConfigFunc := func() error {
+		buffer := new(bytes.Buffer)
+		err := CompileAndExecute(info, buffer)
+		if err != nil {
+			return errors.Wrap(err, "failed to execute config file")
+		}
+		bts := buffer.Bytes()
+		configResults := string(bts)
+		telemetry.Trace("Got config results", slog.String("results", configResults))
+		if err = json.Unmarshal(bts, &config); err != nil {
+			return errors.Wrap(err, "failed to unmarshal resulting config")
+		}
+		telemetry.Trace("writing the config file to cache", slog.String("cachedfile", configPath))
+		err = config.cacher.Add("config.json", bytes.NewBuffer(bts))
+		if err != nil {
+			return errors.Wrap(err, "failed to add to cache")
+		}
+		return nil
+	}
+	config.hash = hashedFile
+	configs[fileName] = config
 	if !success {
 		slog.Debug("config isn't cached, creating it now", slog.String("CachedPath", configPath))
-		err := telemetry.TimeWithError("compile config", func() error {
-			buffer := new(bytes.Buffer)
-			err := CompileAndExecute(fileName, buffer)
-			if err != nil {
-				return errors.Wrap(err, "failed to execute config file")
-			}
-			bts := buffer.Bytes()
-			configResults := string(bts)
-			telemetry.Trace("Got config results", slog.String("results", configResults))
-			if err = json.Unmarshal(bts, &config); err != nil {
-				return errors.Wrap(err, "failed to unmarshal resulting config")
-			}
-			telemetry.Trace("writing the config file to cache", slog.String("cachedfile", configPath))
-			err = config.cacher.Add("config.json", bytes.NewBuffer(bts))
-			if err != nil {
-				return errors.Wrap(err, "failed to add to cache")
-			}
-			return nil
-		})
+		err := telemetry.TimeWithError("compile config", makeConfigFunc)
 		if err != nil {
 			slog.Error("Faild to execute configuration file", slog.String("error", err.Error()))
 			return config, nil
 		}
-
 	} else {
 		if err = json.Unmarshal(buff.Bytes(), &config); err != nil {
-			return config, errors.Wrap(err, "failed to unmarshal cached config")
+			slog.Warn("looks like a bad config was cached, attempting to recover", slog.String("error", err.Error()))
+			err := makeConfigFunc()
+			if err != nil {
+				slog.Warn("Cache Recovery failed, harbor may act weird because of this", slog.String("error", err.Error()))
+				return config, nil
+			}
 		}
 	}
-	config.hash = hashedFile
-	configs[fileName] = config
 
 	return config, nil
 }

@@ -1,4 +1,4 @@
-import { Dependency, ExecCommand, Package, PackageSetup,  } from "../config/dist";
+import { LocalDependency, ExecCommand, Package, PackageSetup,  } from "../config/dist";
 
 const GO_VERSION = "go1.22.1";
 
@@ -10,9 +10,7 @@ const pkg = new Package("harbor-code", {
     stability: "Alpha", 
 });
 
-const nodego = new Dependency(pkg, "https://github.com/radding/harbor", {
-    path: "nodego/"
-});
+const config = new LocalDependency(pkg, "../config");
 
 
 const vendorModules = new ExecCommand(pkg, "vendor-modules", {
@@ -39,16 +37,19 @@ const installGoVersion = new ExecCommand(pkg, "go-install", {
     ]
 })
 
-const ensureGoVersion = new ExecCommand(pkg, "go-version", {
-    executable: "gvm",
-    args: [
-        "use",
-        GO_VERSION,
-    ]
-})
+// const ensureGoVersion = new ExecCommand(pkg, "go-version", {
+//     executable: "/bin/bash",
+//     args: [
+//         "-c",
+//         `gvm_use ${GO_VERSION}`,
+//     ],
+//     env: {
+//         // @ts-expect-error
+//         "PATH": process.env.PATH
+//     }
+// })
 
 let pipeline = installGoVersion
-    .then(ensureGoVersion)
     .then(tidyModules)
     .then(vendorModules);
 
@@ -66,15 +67,7 @@ const tests = new ExecCommand(pkg, "test", {
 });
 pkg.registerTask(tests);
 
-const lint = new ExecCommand(pkg, "lint", {
-    executable: "golangci-lint",
-    args: [
-        "lint",
-    ]
-});
-pkg.registerTask(lint);
-
-pkg.registerTask(new ExecCommand(pkg, "build", {
+const goBuild = new ExecCommand(pkg, "go-build", {
     executable: "go",
     args: [
         "build",
@@ -83,9 +76,30 @@ pkg.registerTask(new ExecCommand(pkg, "build", {
         "./cmd/harbor/main.go"
     ]
 }).needs(
-    nodego.task("test"),
+    config.task("build"),
     tests,
-    lint,
+)
+
+// const lint = new ExecCommand(pkg, "lint", {
+//     executable: "golangci-lint",
+//     args: [
+//         "lint",
+//     ]
+// });
+// pkg.registerTask(lint);
+
+pkg.registerTask(new ExecCommand(pkg, "build", {
+    executable: "codesign",
+    args: [
+        "--sign",
+        "-",
+        "--force",
+        "--preserve-metadata=entitlements,requirements,flags,runtime",
+        "./harbor"
+    ]
+}).needs(
+   goBuild,
+    // lint,
 ));
 
 export default pkg;

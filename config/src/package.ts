@@ -93,6 +93,17 @@ export class Package extends Construct {
 	}
 
 	/**
+	 *This returns the root of the package, aka where the .harborrc.ts file is found
+	 *
+	 * @readonly
+	 * @type {string}
+	 * @memberof Package
+	 */
+	public get root(): string {
+		return path.dirname(this.location);
+	}
+
+	/**
 	 * addCommand
 	 */
 	public addTask(taskName: string, taskNode: Node) {

@@ -8,8 +8,22 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
+	"github.com/radding/harbor-runner/internal/cache"
+	packageconfig "github.com/radding/harbor-runner/internal/package-config"
 	"github.com/radding/harbor-runner/internal/telemetry"
 )
+
+type taskContextKeyType string
+
+const _TASK_CONTEXT_KEY = taskContextKeyType("TASK")
+
+func GetTaskFromContext(ctx context.Context) (Task, error) {
+	t, ok := ctx.Value(_TASK_CONTEXT_KEY).(*Task)
+	if !ok {
+		return Task{}, errors.New("could not get Task from context")
+	}
+	return *t, nil
+}
 
 type Executor interface {
 	Execute(ctx context.Context, kind string, opts json.RawMessage) error
@@ -26,6 +40,10 @@ type Task struct {
 	err           error
 }
 
+func (t *Task) GetExecutor() Executor {
+	return t.executor
+}
+
 func (t *Task) addDependency(t2 *Task) {
 	if _, ok := t.dependencySet[t2.ID]; ok {
 		return
@@ -37,13 +55,22 @@ func (t *Task) addDependency(t2 *Task) {
 func (t *Task) Execute(ctx context.Context) error {
 	return telemetry.TimeWithError(fmt.Sprintf("executing task %s", t.ID), func() error {
 		slog.Debug("Executing task", slog.String("task_id", t.ID))
+		cfg, err := packageconfig.ExtractConfigFromContext(ctx)
+		if err != nil {
+			return errors.Wrap(err, "could not get config from context")
+		}
+		cacheObj, err := cfg.GetCache().GetSubCache(t.ID)
+		if err != nil {
+			return errors.Wrap(err, "failed to get sub cache")
+		}
 		if t.done {
 			slog.Debug("Task has already been done durring this run, returning early")
 			return t.err
 		}
-		ctx = context.WithValue(ctx, "TaskID", t.ID)
+		ctx = context.WithValue(ctx, _TASK_CONTEXT_KEY, t)
+		ctx = context.WithValue(ctx, cache.CacheContextKeyValue, cacheObj)
 		ctx, cancel := context.WithCancelCause(ctx)
-		err := t.executeChildren(ctx)
+		err = t.executeChildren(ctx)
 		if err != nil {
 			cancel(err)
 			slog.Warn("task's children failed to execute", slog.String("task_id", t.ID), slog.String("error", err.Error()))

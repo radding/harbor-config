@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 
 	"github.com/clarkmcc/go-typescript"
@@ -46,6 +47,7 @@ func CompileAndExecute(fiName string, resultWriter io.Writer) error {
 	res = fmt.Sprintf("%s\n const fs = require(\"fs\");fs.writeFileSync(\"%s\", JSON.stringify(exports.default.createTree()));", res, filepath.ToSlash(tempFi.Name()))
 	slog.Debug(fmt.Sprintf("COMPILED SCRIPT: \n%s\nEND COMPILED SCRIPT", res))
 	cmd := exec.Command("node", "-e", res)
+	cmd.Dir = path.Dir(fiName)
 	cmd.Env = append(os.Environ(), "HARBORJS_IS_IN_RUNNER=true", fmt.Sprintf("HARBORJS_HARBOR_LOC=%s", fiName))
 	cmd.Stderr = NewPipedLogger(slog.Error, slog.String("file", fiName))
 	cmd.Stdout = NewPipedLogger(slog.Info, slog.String("file", fiName))

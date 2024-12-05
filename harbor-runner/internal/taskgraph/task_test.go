@@ -44,7 +44,8 @@ func TestExecutionOrder(t *testing.T) {
 		Kind:         "test4",
 		Dependencies: []*Task{task3, task1},
 	}
-	err := rootTask.Execute(context.Background())
+	ctx := cfg.ConfigureContext(context.Background())
+	err := rootTask.Execute(ctx)
 	assert.NoError(err)
 	assert.Equal([]string{"test1", "test2", "test3", "test4"}, executor.executionOrder)
 }
@@ -84,7 +85,8 @@ func TestErrorCancelsEverything(t *testing.T) {
 		Kind:         "test4",
 		Dependencies: []*Task{task3, task1},
 	}
-	err := rootTask.Execute(context.Background())
+	ctx := cfg.ConfigureContext(context.Background())
+	err := rootTask.Execute(ctx)
 	assert.Error(err)
 	assert.Equal([]string{"test1", "test2", "blow_up"}, executor.executionOrder)
 }

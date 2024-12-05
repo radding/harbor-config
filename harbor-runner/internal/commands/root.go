@@ -11,11 +11,6 @@ import (
 var machineReadableLogs *bool
 var logLevel *telemetry.LogLevel = telemetry.LogLevelPtr(telemetry.InfoLevel)
 
-func init() {
-	machineReadableLogs = rootCmd.PersistentFlags().BoolP("machine-readable", "m", false, "Produce machine readable JSON logs?")
-	rootCmd.PersistentFlags().VarP(logLevel, "log-level", "v", "The Log level to set the logger to. Can be: Fatal, Error, Warn, Info, Debug, Http, Metrics, and Trace")
-}
-
 var rootCmd = &cobra.Command{
 	Short: "Harbor is a tool to manage workspaces for projects",
 	Long:  `Harbor is a workspace management and build tool that enables developers to manage their projects more effectively.`,
@@ -24,15 +19,16 @@ var rootCmd = &cobra.Command{
 	},
 }
 
-var exec executor.Executor
-
 type RootExecutor struct {
 	Exec executor.Executor
 }
 
 func (r *RootExecutor) Initialize() error {
+	machineReadableLogs = rootCmd.PersistentFlags().BoolP("machine-readable", "m", false, "Produce machine readable JSON logs?")
+	rootCmd.PersistentFlags().VarP(logLevel, "log-level", "v", "The Log level to set the logger to. Can be: Fatal, Error, Warn, Info, Debug, Http, Metrics, and Trace")
 	rootCmd.ParseFlags(os.Args)
-	exec = r.Exec
+	createRunCommand(rootCmd, r.Exec)
+	createSetupCommand(rootCmd, r.Exec)
 	telemetry.ConfigureLogs(*machineReadableLogs, *logLevel)
 	return nil
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/radding/harbor-runner/internal/cfg"
 	"github.com/radding/harbor-runner/internal/commands"
 	exec "github.com/radding/harbor-runner/internal/executor"
+	"github.com/radding/harbor-runner/internal/executor/builtins"
 	packageconfig "github.com/radding/harbor-runner/internal/package-config"
 	"github.com/radding/harbor-runner/internal/telemetry"
 )
@@ -22,6 +23,7 @@ func main() {
 	app.Register(executor)
 	app.Register(config)
 	app.Register(&packageconfig.Lifecycle{})
+	app.Register(builtins.New(taskExecutor))
 	app.Register(taskExecutor)
 
 	err := application.RunApplication(app)

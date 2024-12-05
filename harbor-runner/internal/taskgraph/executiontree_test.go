@@ -4,9 +4,16 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/radding/harbor-runner/internal/cache"
 	packageconfig "github.com/radding/harbor-runner/internal/package-config"
 	"github.com/stretchr/testify/assert"
 )
+
+var cfg = packageconfig.NewConfig(&cache.NonCache{})
+
+func init() {
+	json.Unmarshal([]byte(testConfig), cfg)
+}
 
 func matchTree(t *Task, cfg *packageconfig.Config, assert *assert.Assertions) {
 	construct := cfg.Constructs[t.ID]
@@ -18,8 +25,7 @@ func matchTree(t *Task, cfg *packageconfig.Config, assert *assert.Assertions) {
 
 func TestCreatingATree(t *testing.T) {
 	assert := assert.New(t)
-	cfg := &packageconfig.Config{}
-	json.Unmarshal([]byte(testConfig), cfg)
+
 	tree, err := CreateTreeFromConfig(cfg, &MockExecutor{})
 	assert.NoError(err)
 	assert.NotNil(tree)
@@ -71,9 +77,8 @@ var testConfig = `{
         "harbor-code/go-version": {
             "kind": "harbor.dev/ExecCommand",
             "options": {
-                "executable": "gvm",
+                "executable": "gvm_use",
                 "args": [
-                    "use",
                     "go1.22.1"
                 ]
             },
