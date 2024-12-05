@@ -27,6 +27,7 @@ type DependencyOptions = RemoteDependencyOpts | LocalDependencyOpts;
 
 export interface Dependency<T extends DependencyOptions = DependencyOptions> extends HarborConstruct{
 	readonly options: T;
+	task(name: string): ITask;
 }
 
 export class RemoteDependency extends HarborConstruct implements Dependency<RemoteDependencyOpts>{
