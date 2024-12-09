@@ -1,0 +1,6 @@
+nav:
+    - installation.md
+    - your-first-harbor-package.md
+    - your-first-task.md
+    - your-first-pkg-dep.md
+    - ...
