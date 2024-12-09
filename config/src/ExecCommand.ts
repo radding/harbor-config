@@ -4,9 +4,13 @@ import { ITask } from "./Task";
 
 // Options for the exec command construct
 type ExecCommandOpts = {
+	// The executable to execute. 
 	executable: string;
+	// The arguments to pass to the executable
 	args: string[];
+	// Any environment variables you want to pass to the executable. 
 	env?: Record<string, string> | typeof process.env;
+	// Not used currently
 	inputs?: string[]
 }
 

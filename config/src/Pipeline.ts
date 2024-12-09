@@ -4,7 +4,7 @@ import { HarborConstruct } from "./HarborConstruct";
 export class Pipeline extends HarborConstruct {
 	constructor(scope: Construct, id: string, actions: IConstruct[]) {
 		super(scope, id, {
-			kind: "harbor.dev/Noop",
+			kind: "harbor.dev/noop",
 			options: {},
 		});
 		actions.reduce<IConstruct | null>((acc, construct) => {

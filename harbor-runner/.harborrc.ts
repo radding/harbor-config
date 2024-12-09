@@ -80,14 +80,6 @@ const goBuild = new ExecCommand(pkg, "go-build", {
     tests,
 )
 
-// const lint = new ExecCommand(pkg, "lint", {
-//     executable: "golangci-lint",
-//     args: [
-//         "lint",
-//     ]
-// });
-// pkg.registerTask(lint);
-
 pkg.registerTask(new ExecCommand(pkg, "build", {
     executable: "codesign",
     args: [
@@ -99,7 +91,6 @@ pkg.registerTask(new ExecCommand(pkg, "build", {
     ]
 }).needs(
    goBuild,
-    // lint,
 ));
 
 export default pkg;
